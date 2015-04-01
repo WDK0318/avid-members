@@ -25,7 +25,7 @@ final class DoctrineMemberRepository extends DoctrineRepository implements Membe
      */
     public function add($member)
     {
-        return 0;
+        return $this->getConnection()->insert($this->getTableName(), $this->extractData($member), $this->getDataTypes());
     }
 
     /**
@@ -35,7 +35,7 @@ final class DoctrineMemberRepository extends DoctrineRepository implements Membe
      */
     public function update($member)
     {
-        return 0;
+        return $this->getConnection()->update($this->getTableName(), $this->extractData($member), array('username' => $member->getUsername()), $this->getDataTypes());
     }
 
     /**
@@ -45,7 +45,7 @@ final class DoctrineMemberRepository extends DoctrineRepository implements Membe
      */
     public function remove($member)
     {
-        return 0;
+        return $this->getConnection()->delete($this->getTableName(), array('username' => $member->getUsername()));
     }
 
     /**
@@ -55,7 +55,13 @@ final class DoctrineMemberRepository extends DoctrineRepository implements Membe
      */
     public function findByUsername($username)
     {
-        return null;
+        $qb = $this->getBaseQuery()
+            ->where('username = :username')
+            ->setParameter('username', $username);
+
+        $result = $this->execute($qb)->fetchAll();
+
+        return isset($result[0]) ? $this->hydrate($result[0]) : null;
     }
 
     /**
@@ -67,7 +73,11 @@ final class DoctrineMemberRepository extends DoctrineRepository implements Membe
      */
     public function search($keyword, $first = 0, $max = null)
     {
-        return [];
+        $qb = $this->getBaseQuery($first, $max)
+            ->where('username like :username')
+            ->setParameter('username', "%{$keyword}%");
+
+        return $this->hydrateAll($this->execute($qb)->fetchAll());
     }
 
     /**
@@ -77,7 +87,14 @@ final class DoctrineMemberRepository extends DoctrineRepository implements Membe
      */
     public function getSearchCount($keyword)
     {
-        return 0;
+        $qb = $this->getBaseQuery()
+            ->select('count(*) as count')
+            ->where('username like :username')
+            ->setParameter('username', "%{$keyword}%");
+
+        $result = $this->execute($qb)->fetch();
+
+        return (int) $result['count'];
     }
 
     /**
@@ -85,7 +102,13 @@ final class DoctrineMemberRepository extends DoctrineRepository implements Membe
      */
     public function count()
     {
-        return 0;
+        $qb = $this->createQueryBuilder()
+            ->select('count(*) as count')
+            ->from($this->getTableName(), $this->getAlias());
+
+        $result = $this->execute($qb)->fetch();
+
+        return (int) $result['count'];
     }
 
     /**
@@ -96,7 +119,7 @@ final class DoctrineMemberRepository extends DoctrineRepository implements Membe
      */
     public function findAll($first = 0, $max = null)
     {
-        return [];
+        return $this->hydrateAll($this->execute($this->getBaseQuery($first, $max))->fetchAll());
     }
 
     /**
