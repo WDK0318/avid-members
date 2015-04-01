@@ -17,43 +17,52 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 final class DumpTableStructure extends Command
 {
-    function __construct(Connection $connection)
+    /**
+     * @param Connection $connection
+     */
+    public function __construct(Connection $connection)
     {
         $this->connection = $connection;
 
         parent::__construct();
     }
 
+    /**
+     * Command configurations
+     */
     protected function configure()
     {
         $this->setName('dump:tables')->setDescription('Dump the current database table structures to a directory')
-        ->addOption('directory', 'd', InputOption::VALUE_REQUIRED, 'Where to dump the sql', __DIR__ . '/../../resources/sql')
-        ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Display tables only');
+            ->addOption('directory', 'd', InputOption::VALUE_REQUIRED, 'Where to dump the sql', __DIR__ . '/../../resources/sql')
+            ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Display tables only');
     }
 
+    /**
+     * @param InputInterface $input
+     * @param OutputInterface $output
+     * @param Connection $connection
+     *
+     * @return int|null|void
+     */
     protected function execute(InputInterface $input, OutputInterface $output, Connection $connection = NULL)
     {
         $output->writeln('');
 
         $output->write('<info>Dumping the table structures</info>');
 
+        // Notify user if it's a dry-run
         if ($input->getOption('dry-run')) {
             $output->write(' <comment>(dry run only)</comment>');
         }
 
         $output->writeln('');
 
-        $dir = $input->getOption('directory');
-
-        /**
-         * @var AbstractSchemaManager $sm
-         * @var AbstractPlatform $p
-         */
+        /** @var AbstractSchemaManager $sm */
         $sm = $this->connection->getSchemaManager();
-        $p = $sm->getDatabasePlatform();
 
-        $output->writeln("Platform: <comment>{$p->getName()}</comment>");
+        $output->writeln("Platform: <comment>{$sm->getDatabasePlatform()->getName()}</comment>");
 
+        // List all tables and render structure inforamtion output
         $tbls = $sm->listTables();
 
         /** @var TableHelper $ot */
@@ -83,8 +92,7 @@ final class DumpTableStructure extends Command
                       'not null']
             );
 
-            $cols = $tbl->getColumns();
-            foreach ($cols as $c) {
+            foreach ($tbl->getColumns() as $c) {
                 $ot->addRow(
                     [$c->getName(), $c->getType(), $c->getLength(), $c->getNotnull()]
                 );
@@ -93,26 +101,26 @@ final class DumpTableStructure extends Command
             $ot->render($output);
             $output->writeln('');
 
-            /** @var AbstractPlatform $p */
-            $p = $sm->getDatabasePlatform();
-            $sql = $p->getCreateTableSQL($tbl);
+            $data = "";
+            foreach ($sm->getDatabasePlatform()->getCreateTableSQL($tbl) as $stmt) {
+                $data .= $stmt . ';';
+            }
 
+            $path = $input->getOption('directory') . '/' . $tbl->getName() . '.sql';
+            if ($realPath = realpath($path)) {
+                $path = $realPath;
+            }
+
+            // Save create table sql to specified directory if it's not a dry-run
             if ($input->getOption('dry-run') == FALSE) {
-                $data = "";
-                foreach ($sql as $stmt) {
-                    $data .= $stmt . ';';
-                }
-
-                $path = $dir . '/' . $tbl->getName() . '.sql';
-                if ($realPath = realpath($path)) {
-                    $path = $realPath;
-                }
-
                 $output->writeln("<info>Writing $path</info>");
                 file_put_contents(
                     $path,
                     \SqlFormatter::format($data, false)
                 );
+            } else {
+                $output->writeln("<info>Table structure will be saved to: $path</info>");
+                $output->writeln($data);
             }
         }
 
